@@ -479,6 +479,51 @@ class TestRequestCommon(unittest.TestCase):
         self.assertEqual(bar.file.read(),
                          b'these are the contents of the file "bar.txt"\n')
 
+    # PATCH
+    
+    def test_PATCH_bad_content_type(self):
+        from webob.multidict import NoVars
+        data = b'input'
+        INPUT = BytesIO(data)
+        environ = {'wsgi.input': INPUT,
+                   'REQUEST_METHOD': 'PATCH',
+                   'CONTENT_TYPE': 'text/plain',
+                  }
+        req = self._makeOne(environ)
+        result = req.POST
+        self.assertTrue(isinstance(result, NoVars))
+        self.assertTrue(result.reason.startswith('Not an HTML form submission'))
+
+    def test_PATCH_multipart(self):
+        BODY_TEXT = (
+            b'------------------------------deb95b63e42a\n'
+            b'Content-Disposition: form-data; name="foo"\n'
+            b'\n'
+            b'foo\n'
+            b'------------------------------deb95b63e42a\n'
+            b'Content-Disposition: form-data; name="bar"; filename="bar.txt"\n'
+            b'Content-type: application/octet-stream\n'
+            b'\n'
+            b'these are the contents of the file "bar.txt"\n'
+            b'\n'
+            b'------------------------------deb95b63e42a--\n')
+        INPUT = BytesIO(BODY_TEXT)
+        environ = {'wsgi.input': INPUT,
+                   'webob.is_body_seekable': True,
+                   'REQUEST_METHOD': 'PATCH',
+                   'CONTENT_TYPE': 'multipart/form-data; '
+                      'boundary=----------------------------deb95b63e42a',
+                   'CONTENT_LENGTH': len(BODY_TEXT),
+                  }
+        req = self._makeOne(environ)
+        result = req.POST
+        self.assertEqual(result['foo'], 'foo')
+        bar = result['bar']
+        self.assertEqual(bar.name, 'bar')
+        self.assertEqual(bar.filename, 'bar.txt')
+        self.assertEqual(bar.file.read(),
+                         b'these are the contents of the file "bar.txt"\n')
+
     # GET
     def test_GET_reflects_query_string(self):
         environ = {
